@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(GIT_ASKPASS=echo GIT_ASKPASS_ALWAYS=true git -c credential.helper=store push -u https://github.com/pbhuvaneswaran/seo-rank-doctor.git main)",
+      "Bash(git remote *)"
     ]
   }
 }
