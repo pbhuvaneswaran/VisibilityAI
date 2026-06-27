@@ -12,8 +12,9 @@ import { runDiagnosis } from './index.js';
 import { readWebPage } from './src/webReader.js';
 import { analyzeBlogVsLLMs } from './src/blogAnalyzer.js';
 import { generateActions } from './src/actionGenerator.js';
-import { extractCompetitors } from './src/competitorExtractor.js';
+import { findDirectCompetitors, extractCategoryDescription, extractCompetitors } from './src/competitorExtractor.js';
 import { generatePromptsFromPage, generatePromptsFromKeyword } from './src/promptGeneratorFromInput.js';
+import { saveRun } from './src/runLogger.js';
 
 dotenv.config();
 
@@ -107,13 +108,19 @@ app.post('/api/v3/analyze', async (req, res) => {
   const isUrl = isUrlInput(trimmed);
 
   try {
-    let brand, prompts, pageData = null;
+    let brand, prompts, pageData = null, categoryDescription = null, competitors, brandRankings;
 
     if (isUrl) {
       const url = normalizeUrl(trimmed);
       pageData = await readWebPage(url);
       brand = extractBrandFromUrl(url);
-      prompts = await generatePromptsFromPage(pageData);
+
+      // Extract category description first (no brand name), then find competitors + generate prompts in parallel
+      categoryDescription = await extractCategoryDescription(pageData);
+      [competitors, prompts] = await Promise.all([
+        findDirectCompetitors(categoryDescription),
+        generatePromptsFromPage(pageData),
+      ]);
     } else {
       prompts = await generatePromptsFromKeyword(trimmed);
     }
@@ -136,15 +143,9 @@ app.post('/api/v3/analyze', async (req, res) => {
     const llmAnswers = await Promise.all(Object.values(llmJobs));
     const llmResults = Object.fromEntries(llmNames.map((name, i) => [name, llmAnswers[i]]));
 
-    const extractedBrands = await extractCompetitors(llmResults);
-
-    let competitors, brandRankings;
-
-    if (isUrl) {
-      competitors = extractedBrands
-        .filter(b => b.toLowerCase() !== brand.toLowerCase())
-        .slice(0, 4);
-    } else {
+    if (!isUrl) {
+      // Keyword mode: extract brands from LLM answers and rank them
+      const extractedBrands = await extractCompetitors(llmResults);
       const total = prompts.length * llmNames.length;
       brandRankings = countBrandMentions(llmResults, extractedBrands, total).slice(0, 8);
       brand = brandRankings[0]?.brand || 'Unknown';
@@ -163,7 +164,7 @@ app.post('/api/v3/analyze', async (req, res) => {
       }
     }
 
-    res.json({
+    const responsePayload = {
       mode: isUrl ? 'url' : 'keyword',
       brand,
       competitors,
@@ -172,6 +173,7 @@ app.post('/api/v3/analyze', async (req, res) => {
       visibility,
       ...(isUrl
         ? {
+            categoryDescription,
             pageData: { url: pageData.url, title: pageData.title, wordCount: pageData.wordCount, headings: pageData.headings },
             blogGaps,
             actions,
@@ -180,7 +182,16 @@ app.post('/api/v3/analyze', async (req, res) => {
             keyword: trimmed,
             brandRankings,
           }),
+    };
+
+    // Save run for analysis (non-blocking)
+    saveRun({
+      input: trimmed,
+      ...responsePayload,
+      llmAnswers: llmResults,
     });
+
+    res.json(responsePayload);
   } catch (err) {
     console.error('V3 analyze error:', err.message);
     res.status(500).json({ error: err.message });
