@@ -3,7 +3,15 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(GIT_ASKPASS=echo GIT_ASKPASS_ALWAYS=true git -c credential.helper=store push -u https://github.com/pbhuvaneswaran/seo-rank-doctor.git main)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(npm run *)",
+      "Bash(pkill -f \"node server.js\")",
+      "Bash(pkill -f \"vite\")",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s http://localhost:3001/api/runs)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'{len\\(d\\)} runs found'\\); print\\(d[0].keys\\(\\) if d else 'none'\\)\")"
     ]
   }
 }

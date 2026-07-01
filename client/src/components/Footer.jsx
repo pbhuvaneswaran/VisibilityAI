@@ -7,10 +7,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 bg-indigo-500 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xs font-bold">AEO</span>
-              </div>
-              <span className="font-semibold text-white">Visibility.ai</span>
+              <span className="font-bold text-white text-lg tracking-tight">Peach</span>
             </div>
             <p className="text-sm leading-relaxed">
               Know where your brand shows up in AI search — and what to do about it.
@@ -45,7 +42,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-          <p>© {new Date().getFullYear()} Visibility.ai. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Peach. All rights reserved.</p>
           <div className="flex gap-4">
             <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-white transition-colors">Terms of Service</a>

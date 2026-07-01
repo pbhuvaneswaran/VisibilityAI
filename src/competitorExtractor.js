@@ -4,6 +4,53 @@ function getClient() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
+// Single call: returns description + competitors + 3 prompts in one GPT request
+async function analyzePageAndPrepare(pageData) {
+  const client = getClient();
+  const headingText = (pageData.headings || []).slice(0, 10).map(h => h.text).join(', ');
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 700,
+    messages: [{
+      role: 'user',
+      content: `Analyze this web page and return a JSON object with exactly 4 fields:
+
+1. "description": 1-2 sentences describing what the product does — problem it solves and who it's for. NO brand names.
+2. "category": the most specific sub-category this product belongs to (e.g. "AI agent platform for solopreneurs", NOT the broad "productivity tool").
+3. "competitors": array of 4 direct competitors within THAT specific sub-category. Rules:
+   - Must compete for the EXACT SAME customer doing the EXACT SAME job — not the broad parent category
+   - If this is AI-first: competitors must also be AI-first tools in the same niche
+   - A buyer must genuinely compare this product vs the competitor on the SAME shortlist
+   - NEVER include: Notion, ClickUp, Asana, Trello, Miro, Airtable, Slack, Figma, Google Workspace, Canva — these are broad productivity tools, not niche competitors
+   - If you cannot find 4 true direct competitors, list fewer rather than padding with generic tools
+4. "prompts": array of exactly 3 buyer-intent queries someone would type into ChatGPT or Gemini to find this type of product. NO brand or product names. Use the specific sub-category language.
+
+Page title: ${pageData.title}
+Headings: ${headingText}
+Content: ${(pageData.content || '').slice(0, 2000)}
+
+Return ONLY valid JSON, no explanation:
+{"description":"...","category":"...","competitors":[...],"prompts":[...]}`,
+    }],
+  });
+
+  const text = response.choices[0].message.content.trim();
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON found');
+    const result = JSON.parse(match[0]);
+    return {
+      categoryDescription: result.description || '',
+      category: result.category || '',
+      competitors: (result.competitors || []).slice(0, 4),
+      prompts: (result.prompts || []).slice(0, 3),
+    };
+  } catch {
+    throw new Error('Failed to analyze page — could not parse GPT response');
+  }
+}
+
 // Primary: find direct competitors BEFORE querying LLMs, based on what the product does
 async function findDirectCompetitors(categoryDescription) {
   const client = getClient();
@@ -93,4 +140,4 @@ Return ONLY a valid JSON array of strings:
   }
 }
 
-export { findDirectCompetitors, extractCategoryDescription, extractCompetitors };
+export { analyzePageAndPrepare, findDirectCompetitors, extractCategoryDescription, extractCompetitors };

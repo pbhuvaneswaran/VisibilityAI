@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import V3VisibilityFlow from './pages/v3/VisibilityFlow'
+import Dashboard from './pages/v3/Dashboard'
 import HomeV2 from './pages/v2/Home'
 import PricingV2 from './pages/v2/Pricing'
 import Features from './pages/Features'
@@ -24,9 +25,11 @@ export default function AppV3() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout><HomeV2 /></Layout>} />
+        <Route path="/v2" element={<Layout><HomeV2 /></Layout>} />
         <Route path="/app" element={<Layout noFooter><V3VisibilityFlow /></Layout>} />
         <Route path="/v2/app" element={<Layout noFooter><V3VisibilityFlow /></Layout>} />
         <Route path="/v3/app" element={<Layout noFooter><V3VisibilityFlow /></Layout>} />
+        <Route path="/dashboard" element={<Layout noFooter><Dashboard /></Layout>} />
         <Route path="/pricing" element={<Layout><PricingV2 /></Layout>} />
         <Route path="/features" element={<Layout><Features /></Layout>} />
         <Route path="/blog" element={<Layout><BlogList /></Layout>} />

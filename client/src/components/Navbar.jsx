@@ -54,11 +54,8 @@ export default function Navbar({ version = 'v1' }) {
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-        <Link to={v2 ? '/v2' : '/'} className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <span className="text-white text-xs font-bold">AEO</span>
-          </div>
-          <span className="font-semibold text-gray-900 text-lg">Visibility.ai</span>
+        <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+          <span className="font-bold text-gray-900 text-xl tracking-tight">Peach</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
@@ -66,7 +63,7 @@ export default function Navbar({ version = 'v1' }) {
             className={`text-sm font-medium transition-colors ${location.pathname === featuresLink ? 'text-indigo-600' : 'text-gray-600 hover:text-gray-900'}`}>
             Features
           </Link>
-          <Link to={pricingLink}
+<Link to={pricingLink}
             className={`text-sm font-medium transition-colors ${location.pathname === pricingLink ? 'text-indigo-600' : 'text-gray-600 hover:text-gray-900'}`}>
             Pricing
           </Link>
@@ -96,7 +93,7 @@ export default function Navbar({ version = 'v1' }) {
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 px-6 py-4 space-y-3 bg-white">
           <Link to={featuresLink} onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700 hover:text-indigo-600">Features</Link>
-          <Link to={pricingLink} onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700 hover:text-indigo-600">Pricing</Link>
+<Link to={pricingLink} onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700 hover:text-indigo-600">Pricing</Link>
           <div className="text-xs font-bold text-gray-400 uppercase tracking-wide pt-1">Resources</div>
           <Link to="/blog" onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700 hover:text-indigo-600 pl-2">Blog</Link>
           <Link to="/use-cases" onClick={() => setMobileOpen(false)} className="block text-sm font-medium text-gray-700 hover:text-indigo-600 pl-2">Use Cases</Link>

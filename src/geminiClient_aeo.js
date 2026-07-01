@@ -13,7 +13,7 @@ async function askGemini(question) {
 }
 
 async function queryAllQuestionsGemini(questions) {
-  const limit = pLimit(5);
+  const limit = pLimit(2);
   return Promise.all(
     questions.map((question) =>
       limit(async () => {

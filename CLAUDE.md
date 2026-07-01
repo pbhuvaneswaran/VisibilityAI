@@ -1,22 +1,30 @@
-# Project Instructions — AEO/GEO Visibility Tool
+# Project Instructions — Peach (AI Visibility Tool)
 
 > New instructions are added at the top of this file. Older context follows below.
 
 ---
 
-## Latest Instructions (2026-06-27)
+## Latest Instructions (2026-07-02)
 
-- **Base plan = ChatGPT + Gemini only.** Claude (Anthropic) is reserved for a future $199 premium plan. Do not add Claude to V3 UI without explicit instruction.
-- **Prompts must never contain brand names.** `generatePromptsFromPage()` must generate category-level buyer queries. Any change to prompt generation must be validated: run copilotverse.io and confirm no brand name appears in the 8 generated prompts.
-- **Competitors come from explicit lookup, not LLM answer extraction.** `findDirectCompetitors()` is the primary source for URL mode. `extractCompetitors()` is only used for keyword mode brand ranking.
-- **Every run is logged** to `output/runs/<timestamp>.json` for fine-tuning analysis. Do not remove this.
-- **GEMINI_MODEL must be `gemini-2.5-flash`** — the key is a Google Gemini Advanced key, not AI Studio. `gemini-1.5-flash` and `gemini-2.0-flash` are not available on it.
+- **Product name is "Peach"** (was Visibility.ai). Navbar + Footer show "Peach", no AEO badge.
+- **URL-only input.** Keyword mode was removed. `/app` only accepts website URLs.
+- **One version only.** Version toggle (V1/V2/V3) has been removed. `main.jsx` renders AppV3 directly.
+- **3 prompts per run** (was 8) — reduces API calls from 16 to 6, keeps latency under 30s.
+- **1 combined OpenAI prep call** returns description + competitors + prompts together (was 3 separate calls).
+- **Gemini p-limit = 2** to avoid rate limit cascades on the 5 RPM free tier key.
+- **Google AIO is a 3rd platform** via Serper API (`SERPER_API_KEY` already set). Chip in UI, opt-in.
+- **Run logging** saves every run to `output/runs/<timestamp>.json` for fine-tuning.
+- **localStorage persistence** — results survive navigation. Cleared only when user clicks "← New report".
+- **Competitor prompt uses sub-category approach** — GPT must identify the specific sub-category before listing competitors, explicitly blocking Notion/ClickUp/Miro/Airtable/Asana/Trello.
+- **Action generation uses OpenAI** (gpt-4o-mini), not Anthropic. No Anthropic key needed for any core feature.
+- **GEMINI_MODEL must be `gemini-2.5-flash`** — key is Google Gemini Advanced format (AQ.Ab8R...), not AI Studio.
 
 ---
 
-## Project Overview
+## Product Overview
 
-**Product:** AEO/GEO AI Visibility Checker — checks how a brand or topic is cited across ChatGPT and Gemini (Claude in premium tier, future).
+**Name:** Peach  
+**Purpose:** AEO/GEO AI Visibility Checker — shows why a brand isn't cited by ChatGPT, Gemini, and Google AI Overviews, and gives a specific content action plan.
 
 **Stack:** Node.js/Express backend (port 3001), React + Vite + Tailwind v4 frontend (port 5173, proxies /api to 3001).
 
@@ -29,31 +37,43 @@
 
 ---
 
-## Current Build State — V3 (latest, active)
+## Current Build State (active)
 
-### Single-Field Input — Auto-detects URL vs Keyword
+### URL Mode Flow — `POST /api/v3/analyze`
 
-Two modes auto-detected from the input string:
-- **URL mode** (`http://...` or bare domain like `acme.com`) → crawl page → extract category description (no brand name) → find direct competitors → generate 8 unbiased prompts → query ChatGPT + Gemini → score → blog analysis + actions
-- **Keyword mode** (anything else) → generate 8 related queries → query LLMs → extract + rank brands by citation frequency → show competitive landscape
-
-### V3 URL Mode Flow (server.js POST /api/v3/analyze)
 ```
-1. readWebPage(url)                      → page content
-2. extractBrandFromUrl(url)              → "Copilotverse" from domain
-3. extractCategoryDescription(pageData)  → "An OS for solopreneurs using AI..." (NO brand name)
-4. findDirectCompetitors(description)    → ["HoneyBook", "Dubsado", "ClickUp", ...] (parallel)
-   generatePromptsFromPage(pageData)     → 8 generic category queries (parallel)
-5. queryAllQuestionsGPT + queryAllQuestionsGemini → LLM answers (parallel, p-limit 5 each)
-6. scoreVisibility(llmResults, brand, competitors) → scores
-7. analyzeBlogVsLLMs + generateActions  → blog gaps + actions (try/catch, silent fail without Anthropic key)
-8. saveRun(...)                          → output/runs/<timestamp>.json
+1. readWebPage(url) + checkCrawlerAccess(url)     → parallel (~1-2s)
+2. analyzePageAndPrepare(pageData)                 → 1 GPT call returns:
+   - categoryDescription (no brand name)
+   - competitors[] (4 direct, sub-category specific)
+   - prompts[] (3 buyer-intent queries, no brand names)
+3. queryAllQuestionsGPT + queryAllQuestionsGemini  → parallel, p-limit 5 / 2
+   + queryAllQuestionsGoogleAIO (if SERPER_API_KEY set, opt-in chip)
+4. scoreVisibility(llmResults, brand, competitors) → scores
+5. generateActionsOpenAI(gaps, brand, llmResults)  → 3 action cards (if gaps exist)
+6. saveRun(...)                                    → output/runs/<timestamp>.json
 ```
 
-### Key Design Decisions
-- **Prompt bias fix:** prompts are generated from page content but the GPT instruction explicitly forbids brand names. Produces queries like "best AI tools for solopreneurs" not "what does CopilotVerse offer".
-- **Competitor fix:** dedicated pre-query lookup step asks GPT to name direct competitors in the niche, explicitly excluding generic tools (Notion, Trello, Asana) unless they're true primary alternatives.
-- **Honest scoring:** 0% score means the brand isn't being cited yet for generic category queries — that IS the AEO gap the tool surfaces.
+### Results Page — Diagnostic Flow (VisibilityFlow.jsx URL mode)
+
+1. **Score Overview** — stat cards (your %, missed prompts, top competitor, platforms) + per-LLM grid
+2. **Why You're Not Ranking** — shows actual LLM answers per prompt. If gaps exist: shows competitor quotes. If all 0%: shows what AI said instead (full answer snippets).
+3. **Why Competitors Rank** — for top competitors with >0%, quotes the LLM answer that cited them
+4. **What To Do** — action cards if gaps; prompt-based recommendations if all 0%
+5. **Prompt-by-Prompt Breakdown** — expandable table with all LLM answers (PromptTable component)
+6. **Technical Checks** (collapsible) — robots.txt crawler check + blog gaps
+
+### Dashboard — `/dashboard`
+
+5 tabs: **Overview · AI Answers · Content Gaps · Action Plan · Site Audit**
+
+- Overview: stat cards + Recharts line chart (URL runs for same brand only) + leaderboard (latest run's brands only — no cross-run mixing)
+- AI Answers: PromptTable from latest run
+- Content Gaps: BlogAnalysis from latest URL run
+- Action Plan: ActionCards from latest URL run
+- Site Audit: CrawlerCheck + BlogAnalysis
+
+Dashboard accessed via "View Dashboard →" link in results header (not in main navbar).
 
 ---
 
@@ -61,19 +81,18 @@ Two modes auto-detected from the input string:
 
 | File | Purpose |
 |------|---------|
-| `server.js` | Express on port 3001. Routes: POST /api/visibility (V1/V2), POST /api/v3/analyze (V3), POST /api/diagnose, GET /api/health |
-| `src/promptGeneratorFromInput.js` | Uses OpenAI gpt-4o-mini. `generatePromptsFromPage()` — category queries, no brand names. `generatePromptsFromKeyword()` — 8 related queries from keyword |
-| `src/competitorExtractor.js` | Uses OpenAI gpt-4o-mini. `extractCategoryDescription()` — 1-2 sentence product description without brand name. `findDirectCompetitors(desc)` — 4-5 direct competitors. `extractCompetitors(llmResults)` — fallback for keyword mode |
-| `src/runLogger.js` | Saves full run JSON to `output/runs/`. Non-blocking, silent on error |
-| `src/webReader.js` | axios + cheerio. Fetches and parses web pages, returns title/headings/content/wordCount |
-| `src/blogAnalyzer.js` | Uses Anthropic Claude Sonnet. Compares page content vs LLM answers → topic gap list. Skipped silently if no ANTHROPIC_API_KEY |
-| `src/actionGenerator.js` | Uses Anthropic Claude Sonnet. Generates action + evidence for each gap. Skipped silently if no ANTHROPIC_API_KEY |
-| `src/claudeClient_aeo.js` | Claude Haiku AEO queries (premium tier, gated on ANTHROPIC_API_KEY) |
-| `src/openaiClient_aeo.js` | GPT-4o-mini AEO queries, p-limit 5 |
-| `src/geminiClient_aeo.js` | Gemini AEO queries, p-limit 5, uses GEMINI_MODEL env var |
-| `src/visibilityScorer.js` | Scores brand mention rate per LLM and aggregate. Simple substring match |
-| `src/questionGenerator.js` | Legacy V1/V2: Claude generates buyer-intent questions |
-| `src/gapRecommender.js` | Legacy V1/V2: Claude gap recommendations |
+| `server.js` | Express port 3001. Routes: POST /api/v3/analyze, GET /api/runs, GET /api/health |
+| `src/competitorExtractor.js` | `analyzePageAndPrepare()` — single GPT call: description + category + competitors + 3 prompts. Sub-category approach, explicit exclusion of generic tools. |
+| `src/actionGenerator.js` | `generateActionsOpenAI()` — gpt-4o-mini generates 3 actions from visibility gaps with LLM answer evidence |
+| `src/runLogger.js` | Saves full run JSON to `output/runs/`. Non-blocking. |
+| `src/webReader.js` | axios + cheerio. Fetches and parses web pages. |
+| `src/robotsChecker.js` | Fetches robots.txt, checks GPTBot / Google-Extended / ClaudeBot / PerplexityBot. |
+| `src/googleAIOClient.js` | Serper API → Google AI Overview text per prompt. p-limit 3. |
+| `src/openaiClient_aeo.js` | GPT-4o-mini AEO queries. p-limit 5. |
+| `src/geminiClient_aeo.js` | Gemini AEO queries. **p-limit 2** (rate limit protection). |
+| `src/visibilityScorer.js` | Scores brand mention rate per LLM + aggregate. Substring match. |
+| `src/blogAnalyzer.js` | Claude Sonnet (gated, ANTHROPIC_API_KEY empty — silently skipped) |
+| `src/actionGenerator.js` | Old Claude version kept; new `generateActionsOpenAI` is active |
 
 ---
 
@@ -81,97 +100,61 @@ Two modes auto-detected from the input string:
 
 ```
 client/src/
-  main.jsx              — version toggle root (v1/v2/v3), resets to / on version switch
-  VersionToggle.jsx     — floating pill bottom-right, persists in localStorage
-  AppV1.jsx             — V1 routes (original)
-  AppV2.jsx             — V2 routes (multi-LLM, USD pricing)
-  AppV3.jsx             — V3 routes (active default)
+  main.jsx                    — renders AppV3 directly (no version toggle)
+  AppV3.jsx                   — all routes
+  components/
+    Navbar.jsx                — "Peach" branding, no AEO badge, logo → /
+    Footer.jsx                — "Peach" branding
+    llmConfig.js              — LLM_COLORS: chatgpt, gemini, googleaio
+    VisibilityComponents.jsx  — shared: LLMChip, ScoreBar, MentionCell, PromptRow,
+                                PromptTable, ActionCard, BlogAnalysis, CrawlerCheck
   pages/
-    v2/                 — V2 pages (Home, Pricing, AppHome, VisibilityFlow)
     v3/
-      VisibilityFlow.jsx — Single input field, URL/keyword result views, prompt table
+      VisibilityFlow.jsx      — URL-only input, localStorage persistence, diagnostic results
+      Dashboard.jsx           — 5-tab dashboard, Recharts, latest-run-only leaderboard
 ```
-
-### V3 UI Design
-- Single input field: `yoursite.com` or `"best helpdesk software"`
-- Example chips: yoursite.com, "best helpdesk software", "CRM for B2B teams"
-- LLM toggles: ChatGPT (green) + Gemini (blue) only — NO Claude chip
-- URL mode results: score bars, per-LLM breakdown, prompt-by-prompt expandable table, blog analysis, action cards
-- Keyword mode results: brand ranking bars, prompt table, CTA to check own website
 
 ---
 
 ## API Keys (.env)
 
 ```
-GEMINI_API_KEY=<Google Gemini Advanced key — format AQ.Ab8RN6...>
-GEMINI_MODEL=gemini-2.5-flash          # must be 2.5-flash, not 1.5 or 2.0
-OPENAI_API_KEY=<sk-proj-...>           # paid key, used for generation + AEO queries
-ANTHROPIC_API_KEY=                     # empty = blog analysis silently skipped (premium tier)
-PERPLEXITY_API_KEY=                    # not used in V3
-SUPABASE_URL=                          # not yet wired
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_KEY=
-STRIPE_SECRET_KEY=                     # not yet wired
-STRIPE_WEBHOOK_SECRET=
+GEMINI_API_KEY=AQ.Ab8RN6LpWBTOEd9...    # Gemini Advanced key
+GEMINI_MODEL=gemini-2.5-flash             # MUST be 2.5-flash
+OPENAI_API_KEY=sk-proj-...                # paid key, used for ALL generation + AEO queries
+SERPER_API_KEY=9e800560...                # Google AIO via Serper
+SUPABASE_URL=https://arkwwkqepnnrpzsnqdra.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_7qSM7K...
+SUPABASE_SERVICE_KEY=sb_secret_wswvuNe...
+ANTHROPIC_API_KEY=                        # empty — blog analysis skipped silently
+DODO_API_KEY=                             # Dodo Payments (replacing Stripe, not wired yet)
+DODO_WEBHOOK_SECRET=
 PORT=3001
 ```
 
 ---
 
+## What's NOT Built Yet (next sessions)
+
+| Feature | Status |
+|---------|--------|
+| Supabase auth (login/signup) | AuthContext + supabase.js created, Login page not finished |
+| Supabase run storage | Schema designed, not wired — localStorage used as bridge |
+| Dodo Payments checkout | Keys stored, no checkout flow yet |
+| Scheduled monitoring (weekly re-runs) | Not started |
+| PDF/CSV export | Not started |
+
+---
+
 ## Pricing Tiers (USD, planned)
 
-| Tier | Price/mo | LLMs | Runs/mo cap |
-|------|----------|------|-------------|
+| Tier | Price/mo | LLMs | Runs/mo |
+|------|----------|------|---------|
 | Base | $49 | ChatGPT + Gemini | 100 |
 | Agency | $149 | ChatGPT + Gemini | 500 |
-| Premium ($199 — future) | $199 | + Claude | TBD |
+| Premium (future) | $199 | + Claude | TBD |
 | Agency Pro | $299 | All | 2,000 |
-
----
-
-## Cost per Run
-
-~$0.022 baseline (ChatGPT + Gemini, 8 prompts). With blog analysis (Claude): ~$0.047. Budget at $0.05/run.
-
-Generation calls (OpenAI): extractCategoryDescription + findDirectCompetitors + generatePromptsFromPage = ~3 gpt-4o-mini calls per URL run.
-
----
-
-## Run Logging (Fine-Tuning)
-
-Every V3 run saves to `output/runs/<timestamp>-<input-slug>.json`:
-```json
-{
-  "savedAt": "...",
-  "input": "https://copilotverse.io",
-  "mode": "url",
-  "brand": "Copilotverse",
-  "categoryDescription": "An OS for solopreneurs...",
-  "competitors": ["HoneyBook", "Dubsado", "ClickUp"],
-  "prompts": ["best AI tools for solopreneurs", ...],
-  "llmsQueried": ["chatgpt", "gemini"],
-  "llmAnswers": { "chatgpt": [...], "gemini": [...] },
-  "visibility": { "aggregatePercentages": {...} },
-  "blogGaps": [...],
-  "actions": [...]
-}
-```
-Use these files to review what prompts/competitors were generated and tune the GPT instructions in `promptGeneratorFromInput.js` and `competitorExtractor.js`.
-
----
 
 ## Competitive Differentiator
 
-Shows **actual AI answers** AND gives **actionable content recommendations**. No competitor (Profound.io, Otterly.ai, Peec.ai) does both.
-- Main gap vs competitors: no trend over time / weekly monitoring (future)
-
-## Integrations Roadmap
-
-| Integration | Status |
-|-------------|--------|
-| OpenAI ChatGPT | Wired (AEO queries + generation) |
-| Google Gemini | Wired (AEO queries) |
-| Anthropic Claude | Gated (premium, AEO + blog analysis) |
-| Supabase (auth + reports) | Not yet wired |
-| Stripe (subscriptions) | Not yet wired |
+Shows **actual AI answers** per prompt AND gives **specific content actions**. No competitor (Profound.io, Otterly.ai, InfuseOS, Peec.ai) shows the raw LLM answers at this price point.
